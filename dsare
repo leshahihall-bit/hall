@@ -1,0 +1,186 @@
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- Безопасное создание графического меню
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MM2_Ultimate_Menu"
+ScreenGui.ResetOnSpawn = false
+
+local success, err = pcall(function()
+    ScreenGui.Parent = CoreGui
+end)
+if not success then
+    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 210, 0, 240)
+Frame.Position = UDim2.new(0.05, 0, 0.4, 0)
+Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Text = "MM2 Ultimate Menu"
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 15
+Title.Parent = Frame
+
+-- Управление видимостью меню на клавишу G
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.G then
+        Frame.Visible = not Frame.Visible
+    end
+end)
+
+-- Настройки функций
+local toggles = {
+    MurdererESP = true,
+    SheriffESP = true,
+    InnocentESP = true,
+    Aimbot = false,
+    KnifeAura = false
+}
+
+local colors = {
+    MurdererESP = Color3.fromRGB(255, 0, 0),
+    SheriffESP = Color3.fromRGB(0, 120, 255),
+    InnocentESP = Color3.fromRGB(0, 255, 0),
+    Aimbot = Color3.fromRGB(255, 165, 0),
+    KnifeAura = Color3.fromRGB(180, 0, 255)
+}
+
+local function createButton(posY, key, labelText)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.9, 0, 0, 30)
+    btn.Position = UDim2.new(0.05, 0, 0, posY)
+    btn.BackgroundColor3 = toggles[key] and colors[key] or Color3.fromRGB(80, 80, 80)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Text = labelText .. ": " .. (toggles[key] and "ON" or "OFF")
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextSize, btn.Parent = 13, Frame
+
+    btn.MouseButton1Click:Connect(function()
+        toggles[key] = not toggles[key]
+        btn.Text = labelText .. ": " .. (toggles[key] and "ON" or "OFF")
+        btn.BackgroundColor3 = toggles[key] and colors[key] or Color3.fromRGB(80, 80, 80)
+    end)
+end
+
+createButton(38, "MurdererESP", "Убийца (ESP)")
+createButton(73, "SheriffESP", "Шериф (ESP)")
+createButton(108, "InnocentESP", "Невинный (ESP)")
+createButton(143, "Aimbot", "Автонаводка (Пист)")
+createButton(178, "KnifeAura", "Радиус ножа (Убийца)")
+
+-- Определение ролей в MM2
+local function getRole(player)
+    if not player.Character then return "Innocent" end
+    local backpack = player:FindFirstChild("Backpack")
+    local char = player.Character
+    
+    local function hasTool(name)
+        return char:FindFirstChild(name) or (backpack and backpack:FindFirstChild(name))
+    end
+    
+    if hasTool("Knife") then
+        return "Murderer"
+    elseif hasTool("Gun") then
+        return "Sheriff"
+    end
+    return "Innocent"
+end
+
+-- Поиск цели для шерифа
+local function getSheriffTarget()
+    local nearestPlayer, shortestDistance = nil, math.huge
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            if getRole(player) == "Murderer" then
+                return player
+            end
+            local dist = (player.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+            if dist < shortestDistance then
+                shortestDistance, nearestPlayer = dist, player
+            end
+        end
+    end
+    return nearestPlayer
+end
+
+-- Основной цикл для Aimbot и Knife Helper
+RunService.RenderStepped:Connect(function()
+    if not LocalPlayer.Character then return end
+    local currentTool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    
+    -- Логика шерифа (Аймбот)
+    if toggles.Aimbot and getRole(LocalPlayer) == "Sheriff" and currentTool and currentTool.Name == "Gun" then
+        local target = getSheriffTarget()
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character.HumanoidRootPart.Position)
+        end
+    end
+    
+    -- Логика убийцы (Увеличение хитбоксов)
+    if toggles.KnifeAura and getRole(LocalPlayer) == "Murderer" and currentTool and currentTool.Name == "Knife" then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local hrp = player.Character.HumanoidRootPart
+                hrp.Size = Vector3.new(12, 12, 12)
+                hrp.Transparency = 0.8
+                hrp.CanCollide = false
+            end
+        end
+    else
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local hrp = player.Character.HumanoidRootPart
+                if hrp.Size ~= Vector3.new(2, 2, 1) then
+                    hrp.Size = Vector3.new(2, 2, 1)
+                    hrp.Transparency = 1
+                end
+            end
+        end
+    end
+end)
+
+-- Цикл обновления ESP подсветки
+task.spawn(function()
+    while true do
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                local char = player.Character
+                local role = getRole(player)
+                local espKey = role .. "ESP"
+                
+                local hl = char:FindFirstChild("MM2_Highlight")
+                if toggles[espKey] then
+                    if not hl then
+                        hl = Instance.new("Highlight")
+                        hl.Name = "MM2_Highlight"
+                        hl.Adornee = char
+                        hl.FillTransparency = 0.5
+                        hl.OutlineTransparency = 0
+                        hl.Parent = char
+                    end
+                    hl.FillColor = colors[espKey]
+                    hl.OutlineColor = colors[espKey]
+                else
+                    if hl then
+                        hl:Destroy()
+                    end
+                end
+            end
+        end
+        task.wait(0.5)
+    end
+end)
